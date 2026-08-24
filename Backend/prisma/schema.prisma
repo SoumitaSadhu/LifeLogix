@@ -1,0 +1,21 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id          Int       @id @default(autoincrement())
+  userId      String?   @unique @map("user_id") @db.VarChar(50)
+  email       String?   @unique @db.VarChar(150)
+  mobile      String?   @unique @db.VarChar(15)
+  isVerified  Boolean?  @default(false) @map("is_verified")
+  createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime? @default(now()) @map("updated_at") @db.Timestamp(6)
+  lastLoginAt DateTime? @map("last_login_at") @db.Timestamp(6)
+
+  @@map("users")
+}
