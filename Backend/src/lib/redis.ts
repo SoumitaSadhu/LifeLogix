@@ -1,8 +1,19 @@
-import Redis from "ioredis";
+import "dotenv/config";
+import { Redis } from "ioredis";
 
-const redis = new Redis(process.env.REDIS_URL as string);
+const redisUrl = process.env.REDIS_URL;
+
+if (!redisUrl) {
+  throw new Error("REDIS_URL is not defined. Add your Upstash Redis connection string to the .env file.");
+}
+
+const redis = new Redis(redisUrl, {
+  lazyConnect: true,
+});
 
 redis.on("connect", () => console.log("Redis connected"));
-redis.on("error", (err) => console.error("Redis error:", err));
+redis.on("error", (err: Error) => {
+  console.error("Redis error:", err.message);
+});
 
 export default redis;

@@ -1,8 +1,8 @@
-import { Request, Response } from "express";
-import prisma from "../../lib/prisma";
-import redis from "../../lib/redis";
-import { generateOtp, hashOtp, compareOtp } from "../../utils/otp";
-import { sendSmsOtp } from "../../utils/sms";
+import { type Request, type Response } from "express";
+import prisma from "../../lib/prisma.js";
+import redis from "../../lib/redis.js";
+import { generateOtp, hashOtp, compareOtp } from "../../utils/otp.js";
+import { sendSmsOtp } from "../../utils/sms.js";
 
 const OTP_TTL_SECONDS = 5 * 60;         // 5 min OTP validity
 const COOLDOWN_SECONDS = 60;            // gap between resend requests
