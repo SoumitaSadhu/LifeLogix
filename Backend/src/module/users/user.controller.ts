@@ -60,7 +60,13 @@ export async function sendOtp(req: Request, res: Response) {
   await redis.set(cooldownKey, "1", "EX", COOLDOWN_SECONDS);
 
   // 5️⃣ Send SMS
-  await sendSmsOtp(mobile, otp);
+  try {
+    await sendSmsOtp(mobile, otp);
+  } catch (error) {
+    await redis.del(`otp:${mobile}`, cooldownKey);
+    console.error("Failed to send OTP SMS:", error instanceof Error ? error.message : error);
+    return res.status(502).json({ message: "Could not send OTP. Check SMS provider configuration and try again." });
+  }
 
   return res.status(200).json({ message: "OTP sent successfully" });
 }

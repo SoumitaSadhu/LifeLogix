@@ -9,6 +9,8 @@ if (!redisUrl) {
 
 const redis = new Redis(redisUrl, {
   lazyConnect: true,
+  maxRetriesPerRequest: 1,
+  retryStrategy: (attempt) => (attempt >= 5 ? null : Math.min(attempt * 500, 2000)),
 });
 
 redis.on("connect", () => console.log("Redis connected"));
