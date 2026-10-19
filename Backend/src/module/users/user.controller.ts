@@ -3,6 +3,7 @@ import prisma from "../../lib/prisma.js";
 import redis from "../../lib/redis.js";
 import { generateOtp, hashOtp, compareOtp } from "../../utils/otp.js";
 import { sendSmsOtp } from "../../utils/sms.js";
+import { getAccessUserId, issueAuthSession, revokeAuthSession, rotateAuthSession } from "../../utils/authSession.js";
 
 const OTP_TTL_SECONDS = 5 * 60;         // 5 min OTP validity
 const COOLDOWN_SECONDS = 60;            // gap between resend requests
@@ -128,13 +129,50 @@ export async function verifyOtp(req: Request, res: Response) {
     });
   }
 
-  // 5️⃣ Issue JWT (next step)
-  // const token = generateJWT({ userId: user.userId });
+  await issueAuthSession(user.id, res);
 
   return res.status(200).json({
     message: "OTP verified successfully",
     userId: user.userId,
+    mobile: user.mobile,
     isNewUser,
-    // token,
   });
+}
+
+export async function getCurrentUser(req: Request, res: Response) {
+  const userId = await getAccessUserId(req);
+  if (userId === null) {
+    return res.status(401).json({ message: "Authentication required" });
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    await revokeAuthSession(req, res);
+    return res.status(401).json({ message: "Authentication required" });
+  }
+
+  return res.status(200).json({
+    userId: user.userId,
+    mobile: user.mobile ?? "",
+    isNewUser: false,
+  });
+}
+
+export async function refreshSession(req: Request, res: Response) {
+  const userId = await rotateAuthSession(req, res);
+  if (userId === null) {
+    return res.status(401).json({ message: "Session expired. Please sign in again." });
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    return res.status(401).json({ message: "Session expired. Please sign in again." });
+  }
+
+  return res.status(200).json({ message: "Session refreshed" });
+}
+
+export async function logout(req: Request, res: Response) {
+  await revokeAuthSession(req, res);
+  return res.status(200).json({ message: "Logged out" });
 }

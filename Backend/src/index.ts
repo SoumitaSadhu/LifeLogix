@@ -5,9 +5,12 @@ import authRoutes from "./module/users/user.route.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const frontendOrigins = (process.env.FRONTEND_ORIGINS || "http://localhost:3000")
+  .split(",")
+  .map((origin) => origin.trim());
 
 // ─── Middleware ──────────────────────────────
-app.use(cors());
+app.use(cors({ origin: frontendOrigins, credentials: true }));
 app.use(express.json()); // parses incoming JSON request bodies
 
 // ─── Routes ──────────────────────────────────

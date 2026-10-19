@@ -17,6 +17,7 @@ import { safeUpdateUser, validateUserIntegrity } from './utils/userSecurity';
 import { AuthManager } from './utils/authSecurity';
 import { NotificationManager } from './utils/notificationSystem';
 import { UserStorageManager } from './utils/userStorage';
+import { getCurrentUser, logoutSession, type AuthUser } from './components/api/auth';
 
 interface User {
   id: string;
@@ -28,6 +29,19 @@ interface User {
   weight?: number;
   height?: number;
   conditions?: string[];
+  mobile?: string;
+}
+
+function toAppUser(authUser: AuthUser): User {
+  const id = authUser.userId || authUser.mobile;
+  return {
+    id,
+    email: '',
+    name: 'Health Member',
+    userType: 'client',
+    uniqueId: authUser.userId || authUser.mobile,
+    mobile: authUser.mobile,
+  };
 }
 
 export default function App() {
@@ -35,18 +49,25 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Initialize the user storage system
     UserStorageManager.initializeSystem();
-    
-    // Check for existing session
-    const savedUser = localStorage.getItem('lifelogix_user');
-    if (savedUser) {
-      const userData = JSON.parse(savedUser);
-      setUser(userData);
-      // Update activity for session tracking
-      AuthManager.updateActivity(userData.id);
-    }
-    setLoading(false);
+    localStorage.removeItem('lifelogix_user');
+    let active = true;
+
+    void getCurrentUser()
+      .then((authUser) => {
+        if (!active) return;
+        const userData = toAppUser(authUser);
+        setUser(userData);
+        AuthManager.updateActivity(userData.id);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Update user activity periodically
@@ -60,20 +81,25 @@ export default function App() {
     }
   }, [user]);
 
-  const handleLogin = (userData: User) => {
+  const handleLogin = (authUser: AuthUser) => {
+    const userData = toAppUser(authUser);
     // Track the login session
     AuthManager.trackLogin(userData);
     setUser(userData);
-    localStorage.setItem('lifelogix_user', JSON.stringify(userData));
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await logoutSession();
+    } catch (error) {
+      console.error('Failed to revoke authentication session:', error);
+    }
+
     // Clean up session tracking
     if (user) {
       AuthManager.logout(user.id);
     }
     setUser(null);
-    localStorage.removeItem('lifelogix_user');
     // Clear all health data on logout for privacy
     localStorage.removeItem('lifelogix_health_data');
     localStorage.removeItem('lifelogix_medications');
@@ -103,7 +129,6 @@ export default function App() {
     }
     
     setUser(finalUser);
-    localStorage.setItem('lifelogix_user', JSON.stringify(finalUser));
   };
 
   const getGreeting = () => {

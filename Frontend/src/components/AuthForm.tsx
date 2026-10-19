@@ -6,16 +6,10 @@ import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Alert, AlertDescription } from './ui/alert';
 import { ThemeToggle } from './ThemeToggle';
-import { sendOtp, verifyOtp } from './api/auth';
-
-interface User {
-  userId: string;
-  mobile: string;
-  isNewUser: boolean;
-}
+import { sendOtp, verifyOtp, type AuthUser } from './api/auth';
 
 interface AuthFormProps {
-  onLogin: (user: User) => void;
+  onLogin: (user: AuthUser) => void;
 }
 
 type AuthStep = 'mobile' | 'otp';

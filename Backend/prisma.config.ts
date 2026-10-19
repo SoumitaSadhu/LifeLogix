@@ -3,8 +3,6 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
-console.log("DB URL:", process.env["DATABASE_URL"]);
-
 const databaseUrl = process.env["DATABASE_URL"];
 
 if (!databaseUrl) {
