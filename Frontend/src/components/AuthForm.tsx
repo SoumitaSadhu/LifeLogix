@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Heart, Phone, KeyRound, ArrowRight, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Heart, Phone, KeyRound, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -165,16 +165,18 @@ export function AuthForm({ onLogin }: AuthFormProps) {
                 <div className="space-y-2">
                   <Label htmlFor="mobile">Mobile Number</Label>
                   <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <span className="absolute left-9 top-1/2 transform -translate-y-1/2 text-sm text-muted-foreground">
-                      +91
-                    </span>
+                     <div
+                      className="pointer-events-none absolute flex items-center gap-2 text-muted-foreground"
+                      style={{ left: '0.75rem', top: 0, bottom: 0 }}
+                    >
+                      {/* <Phone className="h-4 w-4" /> */}
+                      <span className="text-sm">+91</span>
+                    </div>
                     <Input
                       id="mobile"
                       type="tel"
                       inputMode="numeric"
-                      placeholder="98765 43210"
-                      className="pl-16"
+                      style={{ paddingLeft: '4.5rem' }}
                       maxLength={10}
                       value={mobile}
                       onChange={(e) => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
@@ -190,10 +192,9 @@ export function AuthForm({ onLogin }: AuthFormProps) {
                 )}
 
                 {success && (
-                  <Alert>
-                    <CheckCircle className="h-4 w-4" />
-                    <AlertDescription>{success}</AlertDescription>
-                  </Alert>
+                  <p role="status" className="text-sm text-green-600">
+                    {success}
+                  </p>
                 )}
 
                 <Button type="submit" className="w-full" disabled={loading}>
@@ -217,7 +218,7 @@ export function AuthForm({ onLogin }: AuthFormProps) {
                 <div className="space-y-2">
                   <Label htmlFor="otp">Verification Code</Label>
                   <div className="relative">
-                    <KeyRound className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    {/* <KeyRound className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" /> */}
                     <Input
                       id="otp"
                       type="text"
@@ -239,10 +240,9 @@ export function AuthForm({ onLogin }: AuthFormProps) {
                 )}
 
                 {success && (
-                  <Alert>
-                    <CheckCircle className="h-4 w-4" />
-                    <AlertDescription>{success}</AlertDescription>
-                  </Alert>
+                  <p role="status" className="text-sm text-green-600">
+                    {success}
+                  </p>
                 )}
 
                 <Button type="submit" className="w-full" disabled={loading}>

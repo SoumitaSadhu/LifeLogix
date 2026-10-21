@@ -30,17 +30,29 @@ interface User {
   height?: number;
   conditions?: string[];
   mobile?: string;
+  targetWeight?: number;
+  targetBP?: string;
+  exerciseGoal?: string;
+  goalNotes?: string;
 }
 
 function toAppUser(authUser: AuthUser): User {
   const id = authUser.userId || authUser.mobile;
   return {
     id,
-    email: '',
-    name: 'Health Member',
+    email: authUser.email || '',
+    name: authUser.name || 'Health Member',
     userType: 'client',
     uniqueId: authUser.userId || authUser.mobile,
     mobile: authUser.mobile,
+    ...(authUser.age != null ? { age: authUser.age } : {}),
+    ...(authUser.weight != null ? { weight: authUser.weight } : {}),
+    ...(authUser.height != null ? { height: authUser.height } : {}),
+    ...(authUser.conditions ? { conditions: authUser.conditions } : {}),
+    ...(authUser.targetWeight != null ? { targetWeight: authUser.targetWeight } : {}),
+    ...(authUser.targetBP ? { targetBP: authUser.targetBP } : {}),
+    ...(authUser.exerciseGoal ? { exerciseGoal: authUser.exerciseGoal } : {}),
+    ...(authUser.goalNotes ? { goalNotes: authUser.goalNotes } : {}),
   };
 }
 
@@ -114,19 +126,6 @@ export default function App() {
     
     // If there's an existing user, use safe update to prevent protected field modifications
     const finalUser = user ? safeUpdateUser(user, updatedUser) : updatedUser;
-    
-    // Update in storage
-    if (finalUser.id) {
-      UserStorageManager.updateUser(finalUser.id, {
-        name: finalUser.name,
-        email: finalUser.email,
-        age: finalUser.age,
-        weight: finalUser.weight,
-        height: finalUser.height,
-        conditions: finalUser.conditions,
-        lastLogin: new Date().toISOString()
-      });
-    }
     
     setUser(finalUser);
   };

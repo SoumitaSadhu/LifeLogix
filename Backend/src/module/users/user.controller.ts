@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { type Request, type Response } from "express";
 import prisma from "../../lib/prisma.js";
 import redis from "../../lib/redis.js";
@@ -14,6 +15,30 @@ const MAX_VERIFY_ATTEMPTS = 5;
 interface OtpData {
   hash: string;
   attempts: number;
+}
+
+async function ensureUserDetails(userId: number) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return null;
+
+  const stableUserId = user.userId ?? randomUUID();
+  const updatedUser = user.userId
+    ? user
+    : await prisma.user.update({
+        where: { id: user.id },
+        data: { userId: stableUserId },
+      });
+
+  await prisma.userDetails.upsert({
+    where: { userId: stableUserId },
+    create: { userId: stableUserId },
+    update: {},
+  });
+
+  return prisma.user.findUnique({
+    where: { id: updatedUser.id },
+    include: { details: true },
+  });
 }
 
 // ─── SEND OTP ────────────────────────────────────────────────
@@ -119,7 +144,7 @@ export async function verifyOtp(req: Request, res: Response) {
 
   if (!user) {
     user = await prisma.user.create({
-      data: { mobile, isVerified: true },
+      data: { mobile, userId: randomUUID(), isVerified: true },
     });
     isNewUser = true;
   } else {
@@ -129,12 +154,27 @@ export async function verifyOtp(req: Request, res: Response) {
     });
   }
 
+  const userWithDetails = await ensureUserDetails(user.id);
+  if (!userWithDetails?.userId) {
+    return res.status(500).json({ message: "Could not initialize user profile" });
+  }
+
   await issueAuthSession(user.id, res);
 
   return res.status(200).json({
     message: "OTP verified successfully",
-    userId: user.userId,
+    userId: userWithDetails.userId,
     mobile: user.mobile,
+    name: userWithDetails.details?.name ?? "",
+    email: userWithDetails.email ?? "",
+    age: userWithDetails.details?.age ?? null,
+    weight: userWithDetails.details?.weightKg ?? null,
+    height: userWithDetails.details?.heightCm ?? null,
+    conditions: userWithDetails.details?.conditions ?? [],
+    targetWeight: userWithDetails.details?.targetWeightKg ?? null,
+    targetBP: userWithDetails.details?.targetBP ?? "",
+    exerciseGoal: userWithDetails.details?.exerciseGoal ?? "",
+    goalNotes: userWithDetails.details?.goalNotes ?? "",
     isNewUser,
   });
 }
@@ -145,8 +185,8 @@ export async function getCurrentUser(req: Request, res: Response) {
     return res.status(401).json({ message: "Authentication required" });
   }
 
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) {
+  const user = await ensureUserDetails(userId);
+  if (!user?.userId) {
     await revokeAuthSession(req, res);
     return res.status(401).json({ message: "Authentication required" });
   }
@@ -154,8 +194,117 @@ export async function getCurrentUser(req: Request, res: Response) {
   return res.status(200).json({
     userId: user.userId,
     mobile: user.mobile ?? "",
+    name: user.details?.name ?? "",
+    email: user.email ?? "",
+    age: user.details?.age ?? null,
+    weight: user.details?.weightKg ?? null,
+    height: user.details?.heightCm ?? null,
+    conditions: user.details?.conditions ?? [],
+    targetWeight: user.details?.targetWeightKg ?? null,
+    targetBP: user.details?.targetBP ?? "",
+    exerciseGoal: user.details?.exerciseGoal ?? "",
+    goalNotes: user.details?.goalNotes ?? "",
     isNewUser: false,
   });
+}
+
+export async function updateProfile(req: Request, res: Response) {
+  const userId = await getAccessUserId(req);
+  if (userId === null) {
+    return res.status(401).json({ message: "Authentication required" });
+  }
+
+  const account = await ensureUserDetails(userId);
+  if (!account?.userId) {
+    return res.status(401).json({ message: "Authentication required" });
+  }
+
+  const name = typeof req.body.name === "string" ? req.body.name.trim() : "";
+  const email = typeof req.body.email === "string" ? req.body.email.trim().toLowerCase() : "";
+  const { age, weight, height, targetWeight } = req.body;
+  const targetBP = typeof req.body.targetBP === "string" ? req.body.targetBP.trim() : "";
+  const exerciseGoal = typeof req.body.exerciseGoal === "string" ? req.body.exerciseGoal.trim() : "";
+  const goalNotes = typeof req.body.goalNotes === "string" ? req.body.goalNotes.trim() : "";
+  const conditions = req.body.conditions;
+
+  if (name.length > 150 || email.length > 150) {
+    return res.status(400).json({ message: "Name or email is too long" });
+  }
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ message: "Enter a valid email address" });
+  }
+  if (age !== undefined && age !== null && (!Number.isInteger(age) || age < 1 || age > 120)) {
+    return res.status(400).json({ message: "Age must be an integer between 1 and 120" });
+  }
+  if (weight !== undefined && weight !== null && (typeof weight !== "number" || weight <= 0 || weight > 500)) {
+    return res.status(400).json({ message: "Weight must be between 0 and 500 kg" });
+  }
+  if (height !== undefined && height !== null && (typeof height !== "number" || height <= 0 || height > 300)) {
+    return res.status(400).json({ message: "Height must be between 0 and 300 cm" });
+  }
+  if (targetWeight !== undefined && targetWeight !== null && (typeof targetWeight !== "number" || targetWeight <= 0 || targetWeight > 500)) {
+    return res.status(400).json({ message: "Target weight must be between 0 and 500 kg" });
+  }
+  if (targetBP.length > 20 || exerciseGoal.length > 200 || goalNotes.length > 5000) {
+    return res.status(400).json({ message: "A health goal field is too long" });
+  }
+  if (!Array.isArray(conditions) || conditions.some((condition) => typeof condition !== "string" || condition.length > 100)) {
+    return res.status(400).json({ message: "Conditions must be a list of strings" });
+  }
+
+  try {
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { email: email || null },
+    });
+    const details = await prisma.userDetails.upsert({
+      where: { userId: user.userId! },
+      create: {
+        userId: user.userId!,
+        name: name || null,
+        age: age ?? null,
+        weightKg: weight ?? null,
+        heightCm: height ?? null,
+        conditions,
+        targetWeightKg: targetWeight ?? null,
+        targetBP: targetBP || null,
+        exerciseGoal: exerciseGoal || null,
+        goalNotes: goalNotes || null,
+      },
+      update: {
+        name: name || null,
+        age: age ?? null,
+        weightKg: weight ?? null,
+        heightCm: height ?? null,
+        conditions,
+        targetWeightKg: targetWeight ?? null,
+        targetBP: targetBP || null,
+        exerciseGoal: exerciseGoal || null,
+        goalNotes: goalNotes || null,
+      },
+    });
+
+    return res.status(200).json({
+      userId: user.userId,
+      mobile: user.mobile ?? "",
+      name: details.name ?? "",
+      email: user.email ?? "",
+      age: details.age,
+      weight: details.weightKg,
+      height: details.heightCm,
+      conditions: details.conditions,
+      targetWeight: details.targetWeightKg,
+      targetBP: details.targetBP ?? "",
+      exerciseGoal: details.exerciseGoal ?? "",
+      goalNotes: details.goalNotes ?? "",
+      isNewUser: false,
+    });
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
+      return res.status(409).json({ message: "That email address is already in use" });
+    }
+    throw error;
+  }
 }
 
 export async function refreshSession(req: Request, res: Response) {

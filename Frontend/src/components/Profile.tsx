@@ -9,6 +9,7 @@ import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { safeUpdateUser, validateUserIntegrity } from '../utils/userSecurity';
+import { saveUserProfile } from './api/auth';
 
 interface User {
   id: string;
@@ -20,6 +21,10 @@ interface User {
   weight?: number;
   height?: number;
   conditions?: string[];
+  targetWeight?: number;
+  targetBP?: string;
+  exerciseGoal?: string;
+  goalNotes?: string;
 }
 
 interface ProfileProps {
@@ -37,40 +42,65 @@ export function Profile({ user, onUpdateUser }: ProfileProps) {
     conditions: user.conditions?.join(', ') || ''
   });
   const [message, setMessage] = useState('');
+  const [saving, setSaving] = useState(false);
   const [goals, setGoals] = useState({
-    targetWeight: '',
-    targetBP: '',
-    exerciseGoal: '',
-    notes: ''
+    targetWeight: user.targetWeight?.toString() || '',
+    targetBP: user.targetBP || '',
+    exerciseGoal: user.exerciseGoal || '',
+    notes: user.goalNotes || ''
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Validate current user integrity before making changes
+  const persistProfile = async () => {
     if (!validateUserIntegrity(user)) {
       setMessage('Error: User data integrity check failed. Please contact support.');
       setTimeout(() => setMessage(''), 5000);
       return;
     }
-    
-    const updates = {
+
+    const profile = {
       name: formData.name,
       email: formData.email,
-      age: formData.age ? parseInt(formData.age) : undefined,
-      weight: formData.weight ? parseFloat(formData.weight) : undefined,
-      height: formData.height ? parseFloat(formData.height) : undefined,
-      conditions: formData.conditions 
+      age: formData.age ? parseInt(formData.age, 10) : null,
+      weight: formData.weight ? parseFloat(formData.weight) : null,
+      height: formData.height ? parseFloat(formData.height) : null,
+      conditions: formData.conditions
         ? formData.conditions.split(',').map(c => c.trim()).filter(c => c.length > 0)
-        : undefined
+        : [],
+      targetWeight: goals.targetWeight ? parseFloat(goals.targetWeight) : null,
+      targetBP: goals.targetBP,
+      exerciseGoal: goals.exerciseGoal,
+      goalNotes: goals.notes,
     };
 
-    // Use safe update function to prevent accidental modification of protected fields
-    const updatedUser = safeUpdateUser(user, updates);
+    setSaving(true);
+    try {
+      const saved = await saveUserProfile(profile);
+      const updatedUser = safeUpdateUser(user, {
+        name: saved.name || '',
+        email: saved.email || '',
+        age: saved.age ?? undefined,
+        weight: saved.weight ?? undefined,
+        height: saved.height ?? undefined,
+        conditions: saved.conditions ?? [],
+        targetWeight: saved.targetWeight ?? undefined,
+        targetBP: saved.targetBP || '',
+        exerciseGoal: saved.exerciseGoal || '',
+        goalNotes: saved.goalNotes || '',
+      });
 
-    onUpdateUser(updatedUser);
-    setMessage('Profile updated successfully!');
-    setTimeout(() => setMessage(''), 3000);
+      onUpdateUser(updatedUser);
+      setMessage('Profile and goals saved successfully.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not save profile. Please try again.');
+    } finally {
+      setSaving(false);
+      setTimeout(() => setMessage(''), 4000);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    void persistProfile();
   };
 
   const calculateBMI = () => {
@@ -253,9 +283,9 @@ export function Profile({ user, onUpdateUser }: ProfileProps) {
                     </p>
                   </div>
 
-                  <Button type="submit" className="w-full">
+                  <Button type="submit" className="w-full" disabled={saving}>
                     <Save className="h-4 w-4 mr-2" />
-                    Save Profile
+                    {saving ? 'Saving...' : 'Save Profile'}
                   </Button>
                 </form>
               </CardContent>
@@ -386,16 +416,16 @@ export function Profile({ user, onUpdateUser }: ProfileProps) {
                 <Label htmlFor="goal-notes">Notes</Label>
                 <Textarea
                   id="goal-notes"
-                  value={goals.notes}
-                  onChange={(e) => setGoals({ ...goals, notes: e.target.value })}
+                    value={goals.notes}
+                    onChange={(e) => setGoals({ ...goals, notes: e.target.value })}
                   placeholder="Additional health goals or notes..."
                   rows={3}
                 />
               </div>
 
-              <Button className="w-full">
+              <Button className="w-full" onClick={() => void persistProfile()} disabled={saving}>
                 <Save className="h-4 w-4 mr-2" />
-                Save Goals
+                {saving ? 'Saving...' : 'Save Goals'}
               </Button>
 
               <Alert>

@@ -16,6 +16,27 @@ model User {
   createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt   DateTime? @default(now()) @map("updated_at") @db.Timestamp(6)
   lastLoginAt DateTime? @map("last_login_at") @db.Timestamp(6)
+  details     UserDetails?
 
   @@map("users")
+}
+
+model UserDetails {
+  id        Int      @id @default(autoincrement())
+  userId    String   @unique @map("user_id") @db.VarChar(50)
+  name      String?  @db.VarChar(150)
+  age       Int?
+  weightKg  Float?   @map("weight_kg")
+  heightCm  Float?   @map("height_cm")
+  conditions String[] @default([])
+  targetWeightKg Float? @map("target_weight_kg")
+  targetBP String? @map("target_bp") @db.VarChar(20)
+  exerciseGoal String? @map("exercise_goal") @db.VarChar(200)
+  goalNotes String? @map("goal_notes") @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@map("user_details")
 }

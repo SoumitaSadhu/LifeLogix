@@ -18,7 +18,11 @@ async function apiClient<T>(endpoint: string, options: RequestOptions = {}): Pro
 
   let response = await fetch(url, requestOptions);
 
-  if (response.status === 401 && (endpoint === "/auth/me" || !endpoint.startsWith("/auth/"))) {
+  if (response.status === 401 && (
+    endpoint === "/auth/me" ||
+    endpoint === "/auth/profile" ||
+    !endpoint.startsWith("/auth/")
+  )) {
     try {
       const refreshResponse = await fetch(`${BASE_URL}/auth/refresh`, {
         method: "POST",
