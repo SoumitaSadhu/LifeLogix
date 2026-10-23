@@ -233,7 +233,7 @@ export default function App() {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
         <Tabs defaultValue={user.userType === 'admin' ? 'admin' : 'dashboard'} className="w-full">
-          <TabsList className={`grid w-full ${user.userType === 'admin' ? 'grid-cols-3' : 'grid-cols-6'} mb-6 bg-card/50 backdrop-blur`}>
+          <TabsList className={`main-navigation-tabs grid w-full ${user.userType === 'admin' ? 'grid-cols-3' : 'grid-cols-6'} mb-6 bg-card/50 backdrop-blur`}>
             {user.userType === 'client' && (
               <>
                 <TabsTrigger value="dashboard" className="flex items-center gap-2">

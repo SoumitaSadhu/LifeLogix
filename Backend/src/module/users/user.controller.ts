@@ -284,6 +284,8 @@ export async function updateProfile(req: Request, res: Response) {
       },
     });
 
+    console.info("User profile and details saved to the database successfully.");
+
     return res.status(200).json({
       userId: user.userId,
       mobile: user.mobile ?? "",
@@ -301,7 +303,7 @@ export async function updateProfile(req: Request, res: Response) {
     });
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
-      return res.status(409).json({ message: "That email address is already in use" });
+      return res.status(409).json({ message: "This email address is associated with another account." });
     }
     throw error;
   }

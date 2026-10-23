@@ -42,6 +42,8 @@ export function Profile({ user, onUpdateUser }: ProfileProps) {
     conditions: user.conditions?.join(', ') || ''
   });
   const [message, setMessage] = useState('');
+  const [messageIsError, setMessageIsError] = useState(false);
+  const [emailError, setEmailError] = useState('');
   const [saving, setSaving] = useState(false);
   const [goals, setGoals] = useState({
     targetWeight: user.targetWeight?.toString() || '',
@@ -53,13 +55,22 @@ export function Profile({ user, onUpdateUser }: ProfileProps) {
   const persistProfile = async () => {
     if (!validateUserIntegrity(user)) {
       setMessage('Error: User data integrity check failed. Please contact support.');
+      setMessageIsError(true);
       setTimeout(() => setMessage(''), 5000);
       return;
     }
 
+    const email = formData.email.trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailError('Enter a valid email address');
+      return;
+    }
+
+    setEmailError('');
+    setMessage('');
     const profile = {
       name: formData.name,
-      email: formData.email,
+      email,
       age: formData.age ? parseInt(formData.age, 10) : null,
       weight: formData.weight ? parseFloat(formData.weight) : null,
       height: formData.height ? parseFloat(formData.height) : null,
@@ -75,23 +86,36 @@ export function Profile({ user, onUpdateUser }: ProfileProps) {
     setSaving(true);
     try {
       const saved = await saveUserProfile(profile);
-      const updatedUser = safeUpdateUser(user, {
+      const updatedUser = {
+        ...safeUpdateUser(user, {
         name: saved.name || '',
         email: saved.email || '',
         age: saved.age ?? undefined,
         weight: saved.weight ?? undefined,
         height: saved.height ?? undefined,
         conditions: saved.conditions ?? [],
+        }),
         targetWeight: saved.targetWeight ?? undefined,
         targetBP: saved.targetBP || '',
         exerciseGoal: saved.exerciseGoal || '',
         goalNotes: saved.goalNotes || '',
-      });
+      };
 
       onUpdateUser(updatedUser);
+      setEmailError('');
       setMessage('Profile and goals saved successfully.');
+      setMessageIsError(false);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Could not save profile. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Could not save profile. Please try again.';
+      if (
+        errorMessage === 'Enter a valid email address' ||
+        errorMessage === 'This email address is associated with another account.'
+      ) {
+        setEmailError(errorMessage);
+      } else {
+        setMessage(errorMessage);
+        setMessageIsError(true);
+      }
     } finally {
       setSaving(false);
       setTimeout(() => setMessage(''), 4000);
@@ -146,6 +170,7 @@ export function Profile({ user, onUpdateUser }: ProfileProps) {
     URL.revokeObjectURL(url);
 
     setMessage('Health data exported successfully!');
+    setMessageIsError(false);
     setTimeout(() => setMessage(''), 3000);
   };
 
@@ -160,7 +185,7 @@ export function Profile({ user, onUpdateUser }: ProfileProps) {
       </div>
 
       {message && (
-        <Alert>
+        <Alert variant={messageIsError ? 'destructive' : 'default'}>
           <AlertDescription>{message}</AlertDescription>
         </Alert>
       )}
@@ -184,7 +209,7 @@ export function Profile({ user, onUpdateUser }: ProfileProps) {
                 <CardDescription>Update your basic information (Unique ID cannot be changed)</CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-4" noValidate>
                   {/* Security Notice */}
                   <Alert>
                     <Lock className="h-4 w-4" />
@@ -197,6 +222,7 @@ export function Profile({ user, onUpdateUser }: ProfileProps) {
                     <Label htmlFor="name">Full Name</Label>
                     <Input
                       id="name"
+                      className="mt-1"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       placeholder="Enter your full name"
@@ -208,10 +234,21 @@ export function Profile({ user, onUpdateUser }: ProfileProps) {
                     <Input
                       id="email"
                       type="email"
+                      className="mt-1"
                       value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      aria-invalid={Boolean(emailError)}
+                      aria-describedby={emailError ? 'email-error' : undefined}
+                      onChange={(e) => {
+                        setFormData({ ...formData, email: e.target.value });
+                        setEmailError('');
+                      }}
                       placeholder="Enter your email"
                     />
+                    {emailError && (
+                      <p id="email-error" className="mt-1 text-sm text-destructive" role="alert">
+                        {emailError}
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -223,7 +260,7 @@ export function Profile({ user, onUpdateUser }: ProfileProps) {
                       id="unique-id"
                       value={user.uniqueId}
                       disabled
-                      className="bg-muted/50 cursor-not-allowed"
+                      className="mt-1 bg-muted/50 cursor-not-allowed"
                       placeholder="Your unique identifier"
                     />
                     <p className="text-xs text-muted-foreground mt-1">
@@ -240,6 +277,7 @@ export function Profile({ user, onUpdateUser }: ProfileProps) {
                       <Input
                         id="age"
                         type="number"
+                        className="mt-1"
                         value={formData.age}
                         onChange={(e) => setFormData({ ...formData, age: e.target.value })}
                         placeholder="30"
@@ -251,6 +289,7 @@ export function Profile({ user, onUpdateUser }: ProfileProps) {
                         id="weight"
                         type="number"
                         step="0.1"
+                        className="mt-1"
                         value={formData.weight}
                         onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
                         placeholder="70.5"
@@ -263,6 +302,7 @@ export function Profile({ user, onUpdateUser }: ProfileProps) {
                     <Input
                       id="height"
                       type="number"
+                      className="mt-1"
                       value={formData.height}
                       onChange={(e) => setFormData({ ...formData, height: e.target.value })}
                       placeholder="175"
@@ -273,6 +313,7 @@ export function Profile({ user, onUpdateUser }: ProfileProps) {
                     <Label htmlFor="conditions">Health Conditions</Label>
                     <Textarea
                       id="conditions"
+                      className="mt-1"
                       value={formData.conditions}
                       onChange={(e) => setFormData({ ...formData, conditions: e.target.value })}
                       placeholder="e.g., Hypertension, Diabetes, etc. (comma-separated)"
@@ -386,6 +427,7 @@ export function Profile({ user, onUpdateUser }: ProfileProps) {
                     id="target-weight"
                     type="number"
                     step="0.1"
+                    className="mt-1"
                     value={goals.targetWeight}
                     onChange={(e) => setGoals({ ...goals, targetWeight: e.target.value })}
                     placeholder="68.0"
@@ -395,6 +437,7 @@ export function Profile({ user, onUpdateUser }: ProfileProps) {
                   <Label htmlFor="target-bp">Target Blood Pressure</Label>
                   <Input
                     id="target-bp"
+                    className="mt-1"
                     value={goals.targetBP}
                     onChange={(e) => setGoals({ ...goals, targetBP: e.target.value })}
                     placeholder="120/80"
@@ -406,6 +449,7 @@ export function Profile({ user, onUpdateUser }: ProfileProps) {
                 <Label htmlFor="exercise-goal">Exercise Goal</Label>
                 <Input
                   id="exercise-goal"
+                  className="mt-1"
                   value={goals.exerciseGoal}
                   onChange={(e) => setGoals({ ...goals, exerciseGoal: e.target.value })}
                   placeholder="e.g., 30 minutes daily, 3x per week"
@@ -416,6 +460,7 @@ export function Profile({ user, onUpdateUser }: ProfileProps) {
                 <Label htmlFor="goal-notes">Notes</Label>
                 <Textarea
                   id="goal-notes"
+                  className="mt-1"
                     value={goals.notes}
                     onChange={(e) => setGoals({ ...goals, notes: e.target.value })}
                   placeholder="Additional health goals or notes..."
