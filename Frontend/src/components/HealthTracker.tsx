@@ -8,6 +8,7 @@ import { Textarea } from './ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
+import { createBloodPressureReading, getBloodPressureReadings } from './api/bp';
 
 interface User {
   id: string;
@@ -32,10 +33,15 @@ interface HealthTrackerProps {
   user: User;
 }
 
+function getLocalDateTimeValue(date: Date) {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().slice(0, 16);
+}
+
 export function HealthTracker({ user }: HealthTrackerProps) {
   const [healthData, setHealthData] = useState<HealthEntry[]>([]);
   const [formData, setFormData] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: getLocalDateTimeValue(new Date()),
     systolic: '',
     diastolic: '',
     heartRate: '',
@@ -49,34 +55,91 @@ export function HealthTracker({ user }: HealthTrackerProps) {
   useEffect(() => {
     const saved = localStorage.getItem('lifelogix_health_data');
     if (saved) {
-      setHealthData(JSON.parse(saved));
+      const localEntries = (JSON.parse(saved) as HealthEntry[])
+        .filter((entry) => entry.type !== 'blood_pressure');
+      setHealthData(localEntries);
     }
-  }, []);
+
+    let isActive = true;
+    void getBloodPressureReadings()
+      .then((readings) => {
+        if (!isActive) return;
+        setHealthData((current) => [
+          ...current.filter((entry) => entry.type !== 'blood_pressure'),
+          ...readings,
+        ]);
+      })
+      .catch((error: unknown) => {
+        if (isActive) {
+          setMessage(error instanceof Error ? error.message : 'Could not load blood pressure history');
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [user.uniqueId]);
 
   const saveHealthData = (newData: HealthEntry[]) => {
     setHealthData(newData);
-    localStorage.setItem('lifelogix_health_data', JSON.stringify(newData));
+    localStorage.setItem(
+      'lifelogix_health_data',
+      JSON.stringify(newData.filter((entry) => entry.type !== 'blood_pressure')),
+    );
   };
 
-  const handleSubmit = (type: string) => {
+  const handleSubmit = async (type: string) => {
+    if (type === 'blood_pressure') {
+      const systolic = Number(formData.systolic);
+      const diastolic = Number(formData.diastolic);
+      const recordedAt = new Date(formData.date);
+
+      if (!formData.systolic || !formData.diastolic) {
+        setMessage('Please enter both systolic and diastolic values');
+        return;
+      }
+      if (!formData.date || Number.isNaN(recordedAt.getTime())) {
+        setMessage('Please enter a valid date and time');
+        return;
+      }
+      if (
+        !Number.isInteger(systolic) ||
+        !Number.isInteger(diastolic) ||
+        systolic <= diastolic ||
+        systolic < 20 ||
+        systolic > 300 ||
+        diastolic < 20 ||
+        diastolic > 200
+      ) {
+        setMessage('Enter valid systolic and diastolic values');
+        return;
+      }
+
+      try {
+        const newEntry = await createBloodPressureReading({
+          systolic,
+          diastolic,
+          recordedAt: recordedAt.toISOString(),
+          notes: formData.notes,
+        });
+        setHealthData((current) => [...current, newEntry]);
+        setMessage('Blood pressure saved successfully!');
+        setFormData((current) => ({
+          ...current,
+          systolic: '',
+          diastolic: '',
+          notes: '',
+        }));
+        setTimeout(() => setMessage(''), 3000);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : 'Could not save blood pressure reading');
+      }
+      return;
+    }
+
     let newEntry: HealthEntry | null = null;
 
     switch (type) {
-      case 'blood_pressure':
-        if (!formData.systolic || !formData.diastolic) {
-          setMessage('Please enter both systolic and diastolic values');
-          return;
-        }
-        newEntry = {
-          id: `bp_${Date.now()}`,
-          date: formData.date,
-          type: 'blood_pressure',
-          systolic: parseInt(formData.systolic),
-          diastolic: parseInt(formData.diastolic),
-          notes: formData.notes || undefined
-        };
-        break;
-
       case 'heart_rate':
         if (!formData.heartRate) {
           setMessage('Please enter heart rate value');
@@ -213,10 +276,10 @@ export function HealthTracker({ user }: HealthTrackerProps) {
           <CardContent>
             <div className="space-y-4">
               <div>
-                <Label htmlFor="date">Date</Label>
+                <Label htmlFor="date">Date and time</Label>
                 <Input
                   id="date"
-                  type="date"
+                  type="datetime-local"
                   value={formData.date}
                   onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                 />
@@ -399,7 +462,7 @@ export function HealthTracker({ user }: HealthTrackerProps) {
                               </Badge>
                             </div>
                             <div className="text-sm text-muted-foreground">
-                              {new Date(entry.date).toLocaleDateString()}
+                              {new Date(entry.date).toLocaleString()}
                             </div>
                             {entry.notes && (
                               <div className="text-xs text-muted-foreground mt-1">

@@ -17,6 +17,7 @@ model User {
   updatedAt   DateTime? @default(now()) @map("updated_at") @db.Timestamp(6)
   lastLoginAt DateTime? @map("last_login_at") @db.Timestamp(6)
   details     UserDetails?
+  bloodPressureReadings BloodPressureReading[]
 
   @@map("users")
 }
@@ -39,4 +40,19 @@ model UserDetails {
   user User @relation(fields: [userId], references: [userId], onDelete: Cascade)
 
   @@map("user_details")
+}
+
+model BloodPressureReading {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  systolic   Int
+  diastolic  Int
+  recordedAt DateTime @default(now()) @map("recorded_at") @db.Timestamp(6)
+  notes      String?  @db.Text
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, recordedAt])
+  @@map("blood_pressure_readings")
 }

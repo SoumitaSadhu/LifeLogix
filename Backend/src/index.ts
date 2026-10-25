@@ -2,6 +2,7 @@ import "dotenv/config"; // MUST be first import — loads .env before anything e
 import express from "express";
 import cors from "cors";
 import authRoutes from "./module/users/user.route.js";
+import bpRoutes from "./module/BP/bp.routes.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -15,6 +16,7 @@ app.use(express.json()); // parses incoming JSON request bodies
 
 // ─── Routes ──────────────────────────────────
 app.use("/api/auth", authRoutes);
+app.use("/api/bp", bpRoutes);
 
 // ─── Health check (optional but useful) ──────
 app.get("/", (req, res) => {
