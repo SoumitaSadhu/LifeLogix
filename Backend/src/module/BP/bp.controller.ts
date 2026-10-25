@@ -8,8 +8,19 @@ const DIASTOLIC_MIN = 20;
 const DIASTOLIC_MAX = 200;
 const NOTES_MAX_LENGTH = 1000;
 
+async function getAuthenticatedUserId(req: Request): Promise<string | null> {
+  const sessionUserId = await getAccessUserId(req);
+  if (sessionUserId === null) return null;
+
+  const user = await prisma.user.findUnique({
+    where: { id: sessionUserId },
+    select: { userId: true },
+  });
+  return user?.userId ?? null;
+}
+
 export async function getBloodPressureReadings(req: Request, res: Response) {
-  const userId = await getAccessUserId(req);
+  const userId = await getAuthenticatedUserId(req);
   if (userId === null) {
     return res.status(401).json({ message: "Authentication required" });
   }
@@ -22,7 +33,7 @@ export async function getBloodPressureReadings(req: Request, res: Response) {
 }
 
 export async function createBloodPressureEntry(req: Request, res: Response) {
-  const userId = await getAccessUserId(req);
+  const userId = await getAuthenticatedUserId(req);
   if (userId === null) {
     return res.status(401).json({ message: "Authentication required" });
   }

@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
 import { createBloodPressureReading, getBloodPressureReadings } from './api/bp';
+import { createBloodSugarReading, getBloodSugarReadings } from './api/bs';
 
 interface User {
   id: string;
@@ -56,7 +57,7 @@ export function HealthTracker({ user }: HealthTrackerProps) {
     const saved = localStorage.getItem('lifelogix_health_data');
     if (saved) {
       const localEntries = (JSON.parse(saved) as HealthEntry[])
-        .filter((entry) => entry.type !== 'blood_pressure');
+        .filter((entry) => entry.type !== 'blood_pressure' && entry.type !== 'blood_sugar');
       setHealthData(localEntries);
     }
 
@@ -75,6 +76,20 @@ export function HealthTracker({ user }: HealthTrackerProps) {
         }
       });
 
+    void getBloodSugarReadings()
+      .then((readings) => {
+        if (!isActive) return;
+        setHealthData((current) => [
+          ...current.filter((entry) => entry.type !== 'blood_sugar'),
+          ...readings,
+        ]);
+      })
+      .catch((error: unknown) => {
+        if (isActive) {
+          setMessage(error instanceof Error ? error.message : 'Could not load blood sugar history');
+        }
+      });
+
     return () => {
       isActive = false;
     };
@@ -84,11 +99,50 @@ export function HealthTracker({ user }: HealthTrackerProps) {
     setHealthData(newData);
     localStorage.setItem(
       'lifelogix_health_data',
-      JSON.stringify(newData.filter((entry) => entry.type !== 'blood_pressure')),
+      JSON.stringify(newData.filter(
+        (entry) => entry.type !== 'blood_pressure' && entry.type !== 'blood_sugar',
+      )),
     );
   };
 
   const handleSubmit = async (type: string) => {
+    if (type === 'blood_sugar') {
+      const value = Number(formData.bloodSugar);
+      const recordedAt = new Date(formData.date);
+
+      if (!formData.bloodSugar) {
+        setMessage('Please enter blood sugar value');
+        return;
+      }
+      if (!formData.date || Number.isNaN(recordedAt.getTime())) {
+        setMessage('Please enter a valid date and time');
+        return;
+      }
+      if (!Number.isInteger(value) || value < 1 || value > 2000) {
+        setMessage('Blood sugar must be an integer between 1 and 2000 mg/dL');
+        return;
+      }
+
+      try {
+        const newEntry = await createBloodSugarReading({
+          value,
+          recordedAt: recordedAt.toISOString(),
+          notes: formData.notes,
+        });
+        setHealthData((current) => [...current, newEntry]);
+        setMessage('Blood sugar saved successfully!');
+        setFormData((current) => ({
+          ...current,
+          bloodSugar: '',
+          notes: '',
+        }));
+        setTimeout(() => setMessage(''), 3000);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : 'Could not save blood sugar reading');
+      }
+      return;
+    }
+
     if (type === 'blood_pressure') {
       const systolic = Number(formData.systolic);
       const diastolic = Number(formData.diastolic);
@@ -151,21 +205,6 @@ export function HealthTracker({ user }: HealthTrackerProps) {
           type: 'heart_rate',
           value: parseInt(formData.heartRate),
           unit: 'bpm',
-          notes: formData.notes || undefined
-        };
-        break;
-
-      case 'blood_sugar':
-        if (!formData.bloodSugar) {
-          setMessage('Please enter blood sugar value');
-          return;
-        }
-        newEntry = {
-          id: `bs_${Date.now()}`,
-          date: formData.date,
-          type: 'blood_sugar',
-          value: parseInt(formData.bloodSugar),
-          unit: 'mg/dL',
           notes: formData.notes || undefined
         };
         break;
