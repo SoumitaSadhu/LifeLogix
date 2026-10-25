@@ -10,6 +10,7 @@ import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
 import { createBloodPressureReading, getBloodPressureReadings } from './api/bp';
 import { createBloodSugarReading, getBloodSugarReadings } from './api/bs';
+import { createWeightReading, getWeightReadings } from './api/weight';
 
 interface User {
   id: string;
@@ -57,7 +58,11 @@ export function HealthTracker({ user }: HealthTrackerProps) {
     const saved = localStorage.getItem('lifelogix_health_data');
     if (saved) {
       const localEntries = (JSON.parse(saved) as HealthEntry[])
-        .filter((entry) => entry.type !== 'blood_pressure' && entry.type !== 'blood_sugar');
+        .filter((entry) =>
+          entry.type !== 'blood_pressure' &&
+          entry.type !== 'blood_sugar' &&
+          entry.type !== 'weight',
+        );
       setHealthData(localEntries);
     }
 
@@ -90,6 +95,20 @@ export function HealthTracker({ user }: HealthTrackerProps) {
         }
       });
 
+    void getWeightReadings()
+      .then((readings) => {
+        if (!isActive) return;
+        setHealthData((current) => [
+          ...current.filter((entry) => entry.type !== 'weight'),
+          ...readings,
+        ]);
+      })
+      .catch((error: unknown) => {
+        if (isActive) {
+          setMessage(error instanceof Error ? error.message : 'Could not load weight history');
+        }
+      });
+
     return () => {
       isActive = false;
     };
@@ -100,12 +119,52 @@ export function HealthTracker({ user }: HealthTrackerProps) {
     localStorage.setItem(
       'lifelogix_health_data',
       JSON.stringify(newData.filter(
-        (entry) => entry.type !== 'blood_pressure' && entry.type !== 'blood_sugar',
+        (entry) =>
+          entry.type !== 'blood_pressure' &&
+          entry.type !== 'blood_sugar' &&
+          entry.type !== 'weight',
       )),
     );
   };
 
   const handleSubmit = async (type: string) => {
+    if (type === 'weight') {
+      const value = Number(formData.weight);
+      const recordedAt = new Date(formData.date);
+
+      if (!formData.weight) {
+        setMessage('Please enter weight value');
+        return;
+      }
+      if (!formData.date || Number.isNaN(recordedAt.getTime())) {
+        setMessage('Please enter a valid date and time');
+        return;
+      }
+      if (!Number.isFinite(value) || value <= 0 || value > 500) {
+        setMessage('Weight must be greater than 0 and at most 500 kg');
+        return;
+      }
+
+      try {
+        const newEntry = await createWeightReading({
+          value,
+          recordedAt: recordedAt.toISOString(),
+          notes: formData.notes,
+        });
+        setHealthData((current) => [...current, newEntry]);
+        setMessage('Weight saved successfully!');
+        setFormData((current) => ({
+          ...current,
+          weight: '',
+          notes: '',
+        }));
+        setTimeout(() => setMessage(''), 3000);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : 'Could not save weight reading');
+      }
+      return;
+    }
+
     if (type === 'blood_sugar') {
       const value = Number(formData.bloodSugar);
       const recordedAt = new Date(formData.date);
@@ -209,20 +268,6 @@ export function HealthTracker({ user }: HealthTrackerProps) {
         };
         break;
 
-      case 'weight':
-        if (!formData.weight) {
-          setMessage('Please enter weight value');
-          return;
-        }
-        newEntry = {
-          id: `weight_${Date.now()}`,
-          date: formData.date,
-          type: 'weight',
-          value: parseFloat(formData.weight),
-          unit: 'kg',
-          notes: formData.notes || undefined
-        };
-        break;
     }
 
     if (newEntry) {

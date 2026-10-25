@@ -19,6 +19,7 @@ model User {
   details     UserDetails?
   bloodPressureReadings BloodPressureReading[]
   bloodSugarReadings BloodSugarReading[]
+  weightReadings WeightReading[]
 
   @@map("users")
 }
@@ -70,4 +71,18 @@ model BloodSugarReading {
 
   @@index([userId, recordedAt])
   @@map("blood_sugar_readings")
+}
+
+model WeightReading {
+  id         Int      @id @default(autoincrement())
+  userId     String   @map("user_id") @db.VarChar(50)
+  weightKg   Float    @map("weight_kg")
+  recordedAt DateTime @default(now()) @map("recorded_at") @db.Timestamp(6)
+  notes      String?  @db.Text
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId, recordedAt])
+  @@map("weight_readings")
 }

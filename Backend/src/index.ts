@@ -4,6 +4,7 @@ import cors from "cors";
 import authRoutes from "./module/users/user.route.js";
 import bpRoutes from "./module/BP/bp.routes.js";
 import bsRoutes from "./module/BS/bs.routes.js";
+import weightRoutes from "./module/Weight/weight.routes.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -19,6 +20,7 @@ app.use(express.json()); // parses incoming JSON request bodies
 app.use("/api/auth", authRoutes);
 app.use("/api/bp", bpRoutes);
 app.use("/api/bs", bsRoutes);
+app.use("/api/weight", weightRoutes);
 
 // ─── Health check (optional but useful) ──────
 app.get("/", (req, res) => {
